@@ -1,61 +1,53 @@
-// the number of points the moving average filter considers when calculating the average
-// only need to change this constant to change how many points filter is affected by in code
-#define AVERAGE_POINTS 10
-// allocate memory for the array of signals
-float signalArray[AVERAGE_POINTS];
-// initialize iterator for moving average filter
-int iterator = 0;
+#include "arduinoFFT.h"
+
+#define SAMPLES 128               // set to 32 point fft
+#define SAMPLING_FREQUENCY 1000.0 // Hz; needs to be less than 10000
+
+/* Setup FFT machinery: */
+arduinoFFT FFT = arduinoFFT();
+unsigned int sampling_period_us;
+unsigned long microseconds;
+double vReal[SAMPLES];
+double vImag[SAMPLES];
+double stuff = 1.00;
 
 
 // the setup routine runs once when you press reset:
 void setup() {
-  // zero initialize the signal array so it starts off 'at rest'
-  for(int index = 0; index < AVERAGE_POINTS; index++) {
-    signalArray[index] = 0.0;
-  }
-  // initialize serial communication at 9600 bits per second:
-  Serial.begin(9600);
+  Serial.begin(115200);
+  sampling_period_us = round(1000000*(1.0/SAMPLING_FREQUENCY));
 }
 
 // the loop routine runs over and over again forever:
 void loop() {
-  // read the input on analog pin 0:
-  int sensorValue = analogRead(A0);
-  // Convert the analog reading (which goes from 0 - 1023) to a voltage (0 - 5V):
-  float voltage = sensorValue * (5.0 / 1023.0);
-  // First attempt at implementing a moving average filter (Savitzky-Golay)
-  // http://www.dspguide.com/CH15.PDF
-  updateArray(voltage);
-  float filteredSignal = mean(signalArray);
-  // print out the value you read:
-  //Serial.println(filteredSignal);
-  Serial.println(voltage);
-}
-
-/*
- * Updates the array of inputs of length AVERAGE_POINTS (the desired number of 
- * past data points to consider when constructing the mean) and handles its iterator.
- * 
- */
-void updateArray(int input) {
-  signalArray[iterator] = input;
-  iterator += 1;
-  // if iterator becomes longer than length of array, reset it to start at the beginning
-  // since that is now the oldest data point
-  if(iterator >= AVERAGE_POINTS) {
-    iterator = 0;
+  /*SAMPLING*/
+  for(int i=0; i<SAMPLES; i++) {
+    
+    microseconds = micros();    //Overflows after around 70 minutes!
+    //vReal[i] = analogRead(A0);
+    vReal[i] = sin(2.0 * 3.14 * SAMPLING_FREQUENCY * (double) i) + sin(2.0 * 3.14 * 5.0 * SAMPLING_FREQUENCY * (double) i) + sin(2.0 * 3.14 * 6.0 * SAMPLING_FREQUENCY * (double) i);
+    vImag[i] = 0;
+     
+    while(micros() < (microseconds + sampling_period_us)){
+    }
   }
-}
-
-/*
- * Calculates the mean of the given signal array based off of AVERAGE_POINTS
- * 
- */
-float mean(float inputArray[]) {
-  float sum = 0.0;
-  for(int index = 0; index < AVERAGE_POINTS; index++) {
-    sum += inputArray[index];
-  } 
-  sum /= (float) AVERAGE_POINTS;
-  return sum;
+ 
+  /*FFT*/
+  FFT.Windowing(vReal, SAMPLES, FFT_WIN_TYP_HAMMING, FFT_FORWARD);
+  FFT.Compute(vReal, vImag, SAMPLES, FFT_FORWARD);
+  FFT.ComplexToMagnitude(vReal, vImag, SAMPLES);
+  double peak = FFT.MajorPeak(vReal, SAMPLES, SAMPLING_FREQUENCY);
+ 
+    /*PRINT RESULTS*/
+  //Serial.println(peak);     //Print out what frequency is the most dominant.
+ 
+  for(int i=0; i<(SAMPLES/2); i++) {
+    /*View all these three lines in serial terminal to see which frequencies has which amplitudes*/
+    //Serial.print((i * 1.0 * SAMPLING_FREQUENCY) / SAMPLES, 1);
+    //Serial.print(" ");
+    Serial.println(vReal[i], 1);    //View only this line in serial plotter to visualize the bins
+  }
+  
+  stuff += 0.5;
+  delay(1000);  //Repeat the process every second OR:
 }
